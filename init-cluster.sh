@@ -401,14 +401,11 @@ function mount_nfs(){
 }
 #-------------------------mount-nfs
 
-le [ ! -f /tmp/ServiceAccount.json ]
+while [ ! -f /tmp/ServiceAccount.json ]
 do
         echo "waiting.." >> /tmp/update.txt
         sleep 60
 done
-
-cp /tmp/ServiceAccount.json /opt/unicloud/config
-echo "ServiceAccount file added to Unicloud"
 
 cd $INSTALL_DIR
 chmod a+x ./setup-unicloud.sh
@@ -416,6 +413,10 @@ chmod a+x ./setup-unicloud.sh
 
 echo "Unicloud installed"
 
+cp /tmp/ServiceAccount.json /opt/unicloud/config
+echo "ServiceAccount file added to Unicloud"
+
+source /opt/unicloud/etc/unicloud.sh
 cd $INSTALL_DIR
 
 adapter_config
