@@ -11,7 +11,7 @@ readonly gluster_volume_name_mnt="localhost:/${gluster_volume_name}"
 readonly gluster_mnt_dir_name="/mnt/gluster"
 
 readonly METADATA_SERVER_URL=http://metadata.google.internal/computeMetadata/v1
-readonly METADATA_SERVER_ATTRIB_URL="$METADATA_SERVER_URL/instance/attributes"
+readonly METADATA_SERVER_ATTRIB_CMD="curl -s $METADATA_SERVER_URL/instance/attributes"
 
 INSTALL_DIR="/tmp/Cluster-Setup"
 YAML_DIR=$INSTALL_DIR
@@ -21,6 +21,7 @@ MACHINE_TYPE=$(python $INSTALL_DIR/fetch-metadata.py clusterMachineType)
 NUM_WORKERS=$(python $INSTALL_DIR/fetch-metadata.py numberOfWorkers)
 GLUSER_DISK_SIZE=$(python $INSTALL_DIR/fetch-metadata.py glusterDiskSize)
 CLUSTER_MACHINE_IMAGE=$(python $INSTALL_DIR/fetch-metadata.py clusterMachineImage)
+NEXTFLOW_VERSION=$($METADATA_SERVER_ATTRIB_CMD/nextflowVersion -H "Metadata-Flavor: Google")
 UC_PATH=/opt/unicloud/bin
 MASTER_NODE_INCLUDED=true
 k8snodecnt=$NUM_WORKERS
