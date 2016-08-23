@@ -91,13 +91,14 @@ function start_cluster(){
 #	set -x
 	local cnt=0
 	local SLEEP_TIME=60
+	local maxtries=10
 	master_node=""
 
 	validate_input
 
 	echo "Starting cluster.."
 	update_profile
-	while [ -z "$master_node" ] && [ $cnt -lt 4 ]
+	while [ -z "$master_node" ] && [ $cnt -lt $maxtries ]
 	do
        	 	sleep $SLEEP_TIME
         	msg=$($UC_PATH/add-nodes -n1 --software-profile  $master_swprofile --hardware-profile $master_hwprofile)
@@ -185,7 +186,7 @@ function execute_retry(){
 function check_k8s_status(){
     local upcnt=0
     local ntries=0
-    local maxtries=6
+    local maxtries=10
     local SLEEP_TIME=30
 
     while [ $upcnt -lt $k8snodecnt ] && [ $ntries -lt $maxtries ]
@@ -208,25 +209,25 @@ function prepare_worker(){
 
                 #just see if system is up, try with simple ssh
                 EXEC_CMD="$sshcmd fedora@${worker_node} exit"
-                execute_retry 2
+                execute_retry 5
 
                 #directory to save state for gluster
                  EXEC_CMD="$sshcmd fedora@${worker_node} sudo mkdir -p -m uog+rwx /var/lib/glusterd"
-                execute_retry 2
+                execute_retry 5
 
                 change_privileged_attribute ${worker_node}
                 EXEC_CMD="$sshcmd fedora@${worker_node} sudo systemctl restart kubelet"
-                execute_retry 2
+                execute_retry 5
         done
 }
 
 #Get master node (expected only one) copy yamls, change privileged flag and restart kubapiserver
 function prepare_master(){
                 EXEC_CMD="scp -q $YAML_DIR/*.yaml fedora@${master_node}:~fedora"
-                execute_retry 2
+                execute_retry 5
                 change_privileged_attribute ${master_node}
                 EXEC_CMD="$sshcmd fedora@${master_node} sudo systemctl restart kube-apiserver"
-                execute_retry 2
+                execute_retry 5
 }
 
 function launch_yamls(){
@@ -250,7 +251,7 @@ function change_privileged_attribute(){
 function check_gluster_running(){
         local cnt=0
         #each worker node running one gluster pod
-        local maxtries=4
+        local maxtries=10
 	local SLEEP_TIME=60
 
         running_cnt=$($sshcmd fedora@${k8s_master} kubectl get pods -l app=gluster-node | grep Running | wc -l)
@@ -386,17 +387,17 @@ function mount_nfs(){
 	# Get list of all worker nodes
 	for worker_node in $(get-node-status --list --software-profile $worker_swprofile | awk -F'.' '{print $1}'); do
        	 	EXEC_CMD="$sshcmd fedora@${worker_node} sudo mkdir -p -m a+rwx $gluster_mnt_dir_name"
-       	 	execute_retry_mnt 2
+       	 	execute_retry_mnt 5
         	EXEC_CMD="$sshcmd fedora@${worker_node} $mountcmd"
-        	execute_retry_mnt 2
+        	execute_retry_mnt 5
 		sharing_worker_node=${worker_node}
 	done
 	echo "sharing node: $sharing_worker_node"
 	if [ "$MASTER_NODE_INCLUDED" = true ]; then
         	EXEC_CMD="$sshcmd fedora@${master_node} sudo mkdir -p -m a+rwx $gluster_mnt_dir_name"
-        	execute_retry_mnt 2
+        	execute_retry_mnt 5
         	EXEC_CMD="$sshcmd fedora@${master_node} sudo mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name"
-        	execute_retry_mnt 2
+        	execute_retry_mnt 5
 	fi
 }
 #-------------------------mount-nfs
