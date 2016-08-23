@@ -23,7 +23,7 @@ GLUSER_DISK_SIZE=$(python $INSTALL_DIR/fetch-metadata.py glusterDiskSize)
 CLUSTER_MACHINE_IMAGE=$(python $INSTALL_DIR/fetch-metadata.py clusterMachineImage)
 NEXTFLOW_VERSION=$($METADATA_SERVER_ATTRIB_CMD/nextflowVersion -H "Metadata-Flavor: Google")
 UC_PATH=/opt/unicloud/bin
-MASTER_NODE_INCLUDED=true
+MASTER_NODE_INCLUDED=false
 k8snodecnt=$NUM_WORKERS
 
 
@@ -400,6 +400,7 @@ function mount_nfs(){
         	EXEC_CMD="$sshcmd fedora@${master_node} sudo mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name"
         	execute_retry_mnt 5
 	fi
+	sudo mkdir -p -m a+rwx $gluster_mnt_dir_name; mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name
 }
 #-------------------------mount-nfs
 
