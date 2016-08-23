@@ -410,7 +410,8 @@ done
 cp /tmp/ServiceAccount.json /opt/unicloud/config
 echo "ServiceAccount file added to Unicloud"
 
-cd /tmp; ./setup-unicloud.sh
+cd $INSTALL_DIR
+./setup-unicloud.sh
 
 echo "Unicloud installed"
 
