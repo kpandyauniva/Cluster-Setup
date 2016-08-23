@@ -2,7 +2,7 @@
 
 setenforce 0
 sed -i 's/enforcing/permissive/' /etc/sysconfig/selinux
-cd unicloud-6.2.0-b291
+cd /tmp/unicloud-6.2.0-b291
 ./install-unicloud.sh
 source /opt/unicloud/etc/unicloud.sh
 unicloud-setup --i-accept-the-eula --defaults
