@@ -1,0 +1,69 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: gluster
+  labels:
+    app: gluster
+spec:
+  template:
+    metadata:
+      labels:
+        app: gluster-node
+    spec:
+      hostNetwork: true
+      containers:
+        - name: gluster-node
+          image: gluster/gluster-centos
+          securityContext:
+            privileged: true
+          ports:
+            - containerPort: 22
+              name: ssh
+            - name: gluster
+              containerPort: 24007
+              protocol: TCP
+            - name: brick1
+              containerPort: 49152
+              protocol: TCP
+            - containerPort: 38465
+              name: gnfs1
+              protocol: TCP
+            - containerPort: 38466
+              protocol: TCP
+              name: gnfs2
+            - containerPort: 38467
+              protocol: TCP
+              name: gnfs3
+            - containerPort: 38468
+              protocol: TCP
+              name: gnfs4
+            - containerPort: 38469
+              protocol: TCP
+              name: gnfs5
+            - containerPort: 111
+              protocol: TCP
+              name: rpcbind-tcp
+            - containerPort: 111
+              protocol: UDP
+              name: rpcbind
+            - containerPort: 2049
+              protocol: TCP
+              name: nfs
+          volumeMounts:
+            - mountPath: /mnt/brick1
+              name: gluster
+            - mountPath: /sys/fs/cgroup
+              readOnly: true
+              name: cgroup
+            - mountPath: /var/lib/glusterd
+              name: statedata
+      volumes:
+        - name: gluster
+          hostPath:
+            path: /mnt/data
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+        - name: statedata
+          hostPath:
+            path: /var/lib/glusterd
