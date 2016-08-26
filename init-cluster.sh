@@ -402,17 +402,30 @@ function mount_nfs(){
 	fi
 	sudo mkdir -p -m a+rwx $gluster_mnt_dir_name; mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name
 }
-#-------------------------mount-nfs
+#-------------------------mount-nfs  - end
 
-#prepare k8s on installer - begin
+#-------------------------prepare nextflow env begin
+function prepareNextflow(){
+   mkdir /opt/nextflow
+   cd /opt/nextflow
+   curl -fsSL get.nextflow.io | bash
+
+sed "s|%%NEXTFLOW_VERSION%%|$NEXTFLOW_VERSION|g" > /opt/nextflow/nextflow.sh << EOF 
+export NEXTFLOW_VERSION=%%NEXTFLOW_VERSION%%
+export PATH=/opt/nextflow:$PATH
+EOF
+ ln -s /opt/nextflow/nextflow.sh /etc/profile.d/nextflow.sh
+}
+
+#-------------------------prepare nextflow env end
+
+#-------------------------prepare k8s on installer - begin
 function prepareInstaller(){
 	curl https://storage.googleapis.com/kubernetes-release/release/v1.2.4/bin/linux/amd64/kubectl -o  /usr/local/sbin
 	chmod +x /usr/local/sbin/kubectl 
-	mkdir /opt/nextflow
-	cd /opt/nextflow
-	curl -fsSL get.nextflow.io | bash
+	prepareNextflow
 }
-#prepare k8s on installer - end
+#-------------------------prepare k8s on installer - end
 
 while [ ! -f /tmp/ServiceAccount.json ]
 do
