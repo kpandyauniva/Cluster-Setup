@@ -404,20 +404,35 @@ function mount_nfs(){
 }
 #-------------------------mount-nfs
 
+#prepare k8s on installer - begin
+function prepareInstaller(){
+	curl https://storage.googleapis.com/kubernetes-release/release/v1.2.4/bin/linux/amd64/kubectl -o  /usr/local/sbin
+	chmod +x /usr/local/sbin/kubectl 
+	mkdir /opt/nextflow
+	cd /opt/nextflow
+	curl -fsSL get.nextflow.io | bash
+}
+#prepare k8s on installer - end
+
 while [ ! -f /tmp/ServiceAccount.json ]
 do
         echo "waiting.." >> /tmp/update.txt
         sleep 60
 done
 
+#TEMP work around until we have unicloud image for gce - begin
 cd $INSTALL_DIR
 chmod a+x ./setup-unicloud.sh
 ./setup-unicloud.sh
 
 echo "Unicloud installed"
+#TEMP work around until we have unicloud image for gce - end
+
 
 cp /tmp/ServiceAccount.json /opt/unicloud/config
 echo "ServiceAccount file added to Unicloud"
+
+prepareInstaller
 
 source /opt/unicloud/etc/unicloud.sh
 cd $INSTALL_DIR
@@ -438,5 +453,8 @@ start_gluster
 echo "Mounting gluster volume to $gluster_mnt_dir_name .."
 mount_nfs
 echo "..mounted"
+
+#setup link to master node for the installer (for kubectl)
+ssh -f -nNT -L 8080:127.0.0.1:8080 fedora@${master_node} 
 
 echo "...done"
