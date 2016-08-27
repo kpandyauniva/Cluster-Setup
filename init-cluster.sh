@@ -421,7 +421,7 @@ EOF
 
 #-------------------------prepare k8s on installer - begin
 function prepareInstaller(){
-	curl https://storage.googleapis.com/kubernetes-release/release/v1.2.4/bin/linux/amd64/kubectl -o  /usr/local/sbin
+	curl https://storage.googleapis.com/kubernetes-release/release/v1.2.4/bin/linux/amd64/kubectl -o  /usr/local/sbin/kubectl
 	chmod +x /usr/local/sbin/kubectl 
 	prepareNextflow
 }
