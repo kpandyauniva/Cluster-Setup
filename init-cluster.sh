@@ -411,7 +411,7 @@ function prepareNextflow(){
    curl -fsSL get.nextflow.io | bash
 
 sed "s|%%NEXTFLOW_VERSION%%|$NEXTFLOW_VERSION|g" > /opt/nextflow/nextflow.sh << EOF 
-export NEXTFLOW_VERSION=%%NEXTFLOW_VERSION%%
+export NXF_VER=%%NEXTFLOW_VERSION%%
 export PATH=/opt/nextflow:$PATH
 EOF
  ln -s /opt/nextflow/nextflow.sh /etc/profile.d/nextflow.sh
