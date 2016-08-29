@@ -338,7 +338,7 @@ function start_gluster(){
         		}
     		}
     		# Ensure the brick directory exists on each peer
-    		$sshcmd fedora@${k8s_master} kubectl exec -i $pod_name -- mkdir -p $gluster_brick_dir
+    		$sshcmd fedora@${k8s_master} kubectl exec -i $pod_name -- mkdir -p -m a+rwx $gluster_brick_dir
 	done
 
 	# Create the Gluster volume
@@ -400,7 +400,7 @@ function mount_nfs(){
         	EXEC_CMD="$sshcmd fedora@${master_node} sudo mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name"
         	execute_retry_mnt 5
 	fi
-	sudo mkdir -p -m a+rwx $gluster_mnt_dir_name; mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name
+	mkdir -p -m a+rwx $gluster_mnt_dir_name; mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name
 }
 #-------------------------mount-nfs  - end
 
