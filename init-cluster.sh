@@ -22,7 +22,6 @@ NUM_WORKERS=$(python $INSTALL_DIR/fetch-metadata.py numberOfWorkers)
 GLUSER_DISK_SIZE=$(python $INSTALL_DIR/fetch-metadata.py glusterDiskSize)
 CLUSTER_MACHINE_IMAGE=$(python $INSTALL_DIR/fetch-metadata.py clusterMachineImage)
 NEXTFLOW_VERSION=$($METADATA_SERVER_ATTRIB_CMD/nextflowVersion -H "Metadata-Flavor: Google")
-UC_PATH=/opt/unicloud/bin
 MASTER_NODE_INCLUDED=false
 k8snodecnt=$NUM_WORKERS
 
@@ -102,7 +101,7 @@ function start_cluster(){
 	while [ -z "$master_node" ] && [ $cnt -lt $maxtries ]
 	do
        	 	sleep $SLEEP_TIME
-        	msg=$($UC_PATH/add-nodes -n1 --software-profile  $master_swprofile --hardware-profile $master_hwprofile)
+        	msg=$(add-nodes -n1 --software-profile  $master_swprofile --hardware-profile $master_hwprofile)
    		master_node=$(get-node-status --list --software-profile  $master_swprofile | head -1 | awk -F'.' '{print $1}')
 		((cnt++))
 	done
@@ -113,7 +112,7 @@ function start_cluster(){
 	else
 		echo "Master node  $master_node created"
 		echo "Adding worker nodes.."
-        	$UC_PATH/add-nodes -n$NUM_WORKERS --software-profile $worker_swprofile --hardware-profile $worker_hwprofile
+        	add-nodes -n$NUM_WORKERS --software-profile $worker_swprofile --hardware-profile $worker_hwprofile
 		if [ $? -ne 0 ]; then
 			echo "Error adding worker nodes" >&2
 			exit 1
@@ -151,7 +150,7 @@ function validate_input(){
 
 #update profile to attach additional disk of specified size (that will be used as gluster disk)
 function update_profile(){
-	$($UC_PATH/update-software-profile --name $worker_swprofile --add-partition data  --device 2.1 --no-preserve --no-boot-loader --file-system xfs  --size $GLUSER_DISK_SIZE''GB --disk-size $GLUSER_DISK_SIZE''GB)
+	$(update-software-profile --name $worker_swprofile --add-partition data  --device 2.1 --no-preserve --no-boot-loader --file-system xfs  --size $GLUSER_DISK_SIZE''GB --disk-size $GLUSER_DISK_SIZE''GB)
         if [ $? -ne 0 ]; then
                echo "Error: could not update master profile for attached disk" >&2
                exit 1
@@ -449,6 +448,9 @@ prepareInstaller
 
 source /opt/unicloud/etc/unicloud.sh
 cd $INSTALL_DIR
+
+chmod a+x delete-k8s-cluster.sh 
+cp delete-k8s-cluster.sh /opt/unicloud/bin
 
 adapter_config
 start_cluster
