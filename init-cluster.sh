@@ -405,7 +405,7 @@ function mount_nfs(){
 
 #-------------------------prepare nextflow env begin
 function prepareNextflow(){
-   mkdir /opt/nextflow
+   mkdir -p -m a+rwx /opt/nextflow
    cd /opt/nextflow
    curl -fsSL get.nextflow.io | bash
 
