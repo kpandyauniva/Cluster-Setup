@@ -1,4 +1,4 @@
-#Unicloud-Installer!/bin/bash
+#!/bin/bash
 
 readonly master_swprofile=master
 readonly master_hwprofile=master-gce
@@ -10,20 +10,25 @@ readonly gluster_brick_dir="/mnt/brick1/${gluster_volume_name}"
 readonly gluster_volume_name_mnt="localhost:/${gluster_volume_name}"
 readonly gluster_mnt_dir_name="/mnt/gluster"
 
-readonly METADATA_SERVER_URL=http://metadata.google.internal/computeMetadata/v1
-readonly METADATA_SERVER_ATTRIB_CMD="curl -s $METADATA_SERVER_URL/instance/attributes"
+readonly METADATA_SERVER_URL="http://metadata.google.internal/computeMetadata/v1"
+readonly HDR="Metadata-Flavor: Google"
+readonly METADATA_SERVER_ATTRIB_CMD="curl -s -f $METADATA_SERVER_URL/instance/attributes"
 
 INSTALL_DIR="/tmp/Cluster-Setup"
 YAML_DIR=$INSTALL_DIR
-ZONE=$(python $INSTALL_DIR/fetch-metadata.py zone)
-PROJECT=$(python $INSTALL_DIR/fetch-metadata.py project-id)
-MACHINE_TYPE=$(python $INSTALL_DIR/fetch-metadata.py clusterMachineType)
-NUM_WORKERS=$(python $INSTALL_DIR/fetch-metadata.py numberOfWorkers)
-GLUSER_DISK_SIZE=$(python $INSTALL_DIR/fetch-metadata.py glusterDiskSize)
-CLUSTER_MACHINE_IMAGE=$(python $INSTALL_DIR/fetch-metadata.py clusterMachineImage)
-NEXTFLOW_VERSION=$($METADATA_SERVER_ATTRIB_CMD/nextflowVersion -H "Metadata-Flavor: Google")
+
+
+NUM_WORKERS=$($METADATA_SERVER_ATTRIB_CMD/node-cnt -H "$HDR")
+MACHINE_TYPE=$($METADATA_SERVER_ATTRIB_CMD/node-machine -H "$HDR")
+CLUSTER_MACHINE_IMAGE=$($METADATA_SERVER_ATTRIB_CMD/node-image -H "$HDR")
+GLUSTER_DISK_SIZE=$($METADATA_SERVER_ATTRIB_CMD/node-gfs-disk-size -H "$HDR")
+NEXTFLOW_VERSION=$($METADATA_SERVER_ATTRIB_CMD/nxf-ver -H "$HDR")
+
+ZONE=$(curl -s $METADATA_SERVER_URL/instance/zone -H "$HDR" | awk -F'/' '{print $4}')
+PROJECT=$(curl -s $METADATA_SERVER_URL/project/project-id -H "$HDR")
+
+
 MASTER_NODE_INCLUDED=false
-k8snodecnt=$NUM_WORKERS
 
 
 function adapter_config() {
@@ -94,8 +99,6 @@ function start_cluster(){
 	local maxtries=10
 	master_node=""
 
-	validate_input
-
 	echo "Starting cluster.."
 	update_profile
 	while [ -z "$master_node" ] && [ $cnt -lt $maxtries ]
@@ -107,14 +110,14 @@ function start_cluster(){
 	done
 
 	if [ -z "$master_node" ]; then
-        	echo "Error: Master not created after several try" >&2
+        	echo "Error: Master not created after several try..exiting "  | tee /dev/stderr
 		exit 1
 	else
 		echo "Master node  $master_node created"
 		echo "Adding worker nodes.."
         	add-nodes -n$NUM_WORKERS --software-profile $worker_swprofile --hardware-profile $worker_hwprofile
 		if [ $? -ne 0 ]; then
-			echo "Error adding worker nodes" >&2
+			echo "Error adding worker nodes..exiting"  | tee /dev/stderr 
 			exit 1
 		else
 			echo "..added "
@@ -125,34 +128,49 @@ function start_cluster(){
 
 function validate_input(){
 
-	test -z $(echo "$NUM_WORKERS" | sed s/[0-9]//g) || NUM_WORKERS=0
+        if ! [[ $NUM_WORKERS =~ ^[0-9]+$ ]] || [ $NUM_WORKERS -le 0 ]; then
+	        echo "Warning: Invalid node-cnt, defaulting to 2" 
+		NUM_WORKERS=2
+	fi
+	k8snodecnt=$NUM_WORKERS
 
-	if [ $NUM_WORKERS -le 0 ]; then
-       	 	echo "Error - input: invalid number of workers" >&2
+        if ! [[ $GLUSTER_DISK_SIZE =~ ^[0-9]+$ ]] || [ $GLUSTER_DISK_SIZE -le 0 ]; then
+                echo "Warning - input: invalid node-gfs-disk-size defaulting to 20" 
+		GLUSTER_DISK_SIZE=20
+        fi
+
+        if [  -z "$MACHINE_TYPE" ]; then
+	        echo "Warning - input: invalid node-machine defaulting to n1-standard-2" 
+		MACHINE_TYPE="n1-standard-2"
+        fi
+
+        if [  -z "$CLUSTER_MACHINE_IMAGE" ]; then
+                echo "Warning - input: invalid node-image, defaulting to fedora-cloud-atomic-23-20160524 " 
+		CLUSTER_MACHINE_IMAGE="fedora-cloud-atomic-23-20160524"
+        fi
+	gcloud compute images list $CLUSTER_MACHINE_IMAGE >/dev/null
+	if [ $? -ne 0 ]; then
+		echo "Error: your installer instance does not seem to service account with permission..exiting" | tee /dev/stderr
 		exit 1
 	fi
+	local found=$(gcloud compute images list $CLUSTER_MACHINE_IMAGE | grep $CLUSTER_MACHINE_IMAGE | wc -l)
+	if [ $found -ne 1 ]; then
+		echo "Error: input image $CLUSTER_MACHINE_IMAGE does not exist..exiting" | tee /dev/stderr
+		exit 1
+	fi
+	found=$(gcloud compute machine-types list $MACHINE_TYPE --zones=$ZONE | grep $MACHINE_TYPE | wc -l)
+        if [ $found -ne 1 ]; then
+                echo "Error: node-machine $MACHINE_TYPE does not exist..exiting" | tee /dev/stderr
+                exit 1
+        fi
 
-        test -z $(echo "$GLUSER_DISK_SIZE" | sed s/[0-9]//g) || GLUSER_DISK_SIZE=0
-
-        if [ $GLUSER_DISK_SIZE -le 0 ]; then
-                echo "Error - input: invalid gluster disk size" >&2
-                exit 1
-        fi
-        if [  -z "$MACHINE_TYPE" ]; then
-                echo "Error - input: invalid clusterMachineType" >&2
-                exit 1
-        fi
-        if [  -z "$CLUSTER_MACHINE_IMAGE" ]; then
-                echo "Error - input: invalid clusterMachineImage" >&2
-                exit 1
-        fi
 }
 
 #update profile to attach additional disk of specified size (that will be used as gluster disk)
 function update_profile(){
-	$(update-software-profile --name $worker_swprofile --add-partition data  --device 2.1 --no-preserve --no-boot-loader --file-system xfs  --size $GLUSER_DISK_SIZE''GB --disk-size $GLUSER_DISK_SIZE''GB)
+	$(update-software-profile --name $worker_swprofile --add-partition data  --device 2.1 --no-preserve --no-boot-loader --file-system xfs  --size $GLUSTER_DISK_SIZE''GB --disk-size $GLUSTER_DISK_SIZE''GB)
         if [ $? -ne 0 ]; then
-               echo "Error: could not update master profile for attached disk" >&2
+               echo "Error: could not update master profile for attached disk..exiting" | tee /dev/stderr
                exit 1
         fi
 
@@ -176,7 +194,7 @@ function execute_retry(){
              fi
         done
         if [ $cnt -eq $waitcnt ]; then
-                echo "Error: executing " $EXEC_CMD >&2
+                echo "Error: executing " $EXEC_CMD "..exiting" | tee /dev/stderr
                 exit 1;
         fi
 }
@@ -197,7 +215,7 @@ function check_k8s_status(){
         sleep $SLEEP_TIME
     done
     if [ $ntries -eq $maxtries ]; then
-          echo "Error: executing " $EXEC_CMD >&2
+          echo "Error: executing " $EXEC_CMD "...exiting" | tee /dev/stderr
           exit 1;
     fi
 
@@ -263,11 +281,11 @@ function check_gluster_running(){
                 ((cnt++))
         done
         if [ $running_cnt -eq 0 ]; then
-                echo "Error: Gluster not running" >&2
+                echo "Error: Gluster not running ..exiting" | tee /dev/stderr
                 exit 1
         fi
         if [ $running_cnt -ne $k8snodecnt ]; then
-                echo "Error: Not all worker nodes running gluster" >&2
+                echo "Error: Not all worker nodes running gluster ..exiting"  | tee /dev/stderr
                 exit 1
         fi
 }
@@ -284,7 +302,7 @@ function start_gluster(){
     		worker_nodes[$worker_node]=1
 	done
 	[[ -n ${worker_nodes[@]} ]] || {
-    		echo "Error: no nodes in software profile [$worker_swprofile]}" >&2
+    		echo "Error: no nodes in software profile [$worker_swprofile] .. exiting" | tee /dev/stderr
     		exit 1
 	}
 
@@ -292,7 +310,7 @@ function start_gluster(){
 	# Find all pods labeled "app=gluster-node" (created by the DaemonSet)
 	tmp_pod_tuples=($($sshcmd fedora@${k8s_master} kubectl get pods -l app=gluster-node --output=jsonpath=\"{range .items[\*]}{.metadata.name}/{.status.podIP}/{.spec.nodeName} {end}\"))
 	pod_tuples=()
-	worker_node_list=()
+	worker_node_list=() 
 	for tmp_pod_tuple in ${tmp_pod_tuples[@]}; do
     		pod_name=$(echo $tmp_pod_tuple | cut -f1 -d/)
     		pod_ip=$(echo $tmp_pod_tuple | cut -f2 -d/)
@@ -303,7 +321,7 @@ function start_gluster(){
     		}
 	done
 	[[ -n ${pod_tuples[@]} ]] || {
-    		echo "No eligible pods with tag \"app=gluster-node\"" >&2
+    		echo "No eligible pods with tag app=gluster-node ..exiting" | tee /dev/stderr
     		exit 1
 	}
 
@@ -332,7 +350,7 @@ function start_gluster(){
         		$run_gluster_cmd -- gluster peer probe $pod_ip
 
         		[[ $? -eq 0 ]] || {
-            			echo "Error: unable to probe for peer $pod_ip" >&2
+            			echo "Error: unable to probe for peer $pod_ip ..exiting"  | tee /dev/stderr
             			exit 1
         		}
     		}
@@ -345,7 +363,7 @@ function start_gluster(){
     		readonly cmd="gluster volume create ${gluster_volume_name} replica ${#pod_tuples[@]} $nodespec"
     		$run_gluster_cmd -- $cmd
     		[[ $? -eq 0 ]] || {
-       			 echo "Error: Gluster 'volume create' failed" >&2
+       			 echo "Error: Gluster 'volume create' failed ..exiting " | tee /dev/stderr
        			 exit 1
     		}
 	fi
@@ -376,7 +394,7 @@ function execute_retry_mnt(){
              fi
         done
         if [ $cnt -eq $waitcnt ]; then
-                echo "Error: executing " $EXEC_CMD >&2
+                echo "Error: executing " $EXEC_CMD "..exiting" | tee /dev/stderr
                 exit 1;
         fi
 }
@@ -409,11 +427,15 @@ function prepareNextflow(){
    cd /opt/nextflow
    curl -fsSL get.nextflow.io | bash
 
-sed "s|%%NEXTFLOW_VERSION%%|$NEXTFLOW_VERSION|g" > /opt/nextflow/nextflow.sh << EOF 
+sed "s|%%NEXTFLOW_VERSION%%|$NEXTFLOW_VERSION|g" > /opt/nextflow/univa-nextflow-env.sh << EOF 
 export NXF_VER=%%NEXTFLOW_VERSION%%
 export PATH=/opt/nextflow:$PATH
+export NXF_WORK=$gluster_mnt_dir_name/work
+export NXF_ASSETS=$gluster_mnt_dir_name/projects
+export NXF_EXECUTOR=k8s
 EOF
- ln -s /opt/nextflow/nextflow.sh /etc/profile.d/nextflow.sh
+ ln -s /opt/nextflow/univa-nextflow-env.sh /etc/profile.d/univa-nextflow-env.sh
+ chmod a+rwx /opt/nextflow/*
 }
 
 #-------------------------prepare nextflow env end
@@ -426,20 +448,38 @@ function prepareInstaller(){
 }
 #-------------------------prepare k8s on installer - end
 
-while [ ! -f /tmp/ServiceAccount.json ]
-do
-        echo "waiting.." >> /tmp/update.txt
-        sleep 60
-done
+#-------------------------validate gcloud permissions
+function validateGcloudPermissions(){
+        gcloud components install beta -q
+        echo "gcloud beta installed.."
+        SERVICE_ACCOUNT=$(gcloud beta config list core/account 2>/dev/null | grep account | awk {'print $3'})
+        if [ -z "$SERVICE_ACCOUNT" ]; then
+              echo " Error:  Could not get service account, please ensure that your IAM apis are enabled and your account has sufficient permission..exiting " | tee /dev/stderr
+              exit 1
+        fi
+}
+#------------------------
+
+#--------------------------create key json file
+function createSvcAccountKey(){
+
+	gcloud beta iam service-accounts keys create --iam-account $SERVICE_ACCOUNT --key-file-type=json /tmp/ServiceAccount.json
+	if [ $? -ne 0 ]; then
+		echo "Error: Could not create account key. Please ensure that IAM apis are enabled and key quota is available." | tee /dev/stderr
+		exit 1
+	fi
+}
+
+validateGcloudPermissions
+validate_input
+createSvcAccountKey
 
 #TEMP work around until we have unicloud image for gce - begin
 cd $INSTALL_DIR
-chmod a+x ./setup-unicloud.sh
-./setup-unicloud.sh
+bash ./setup-unicloud.sh
 
 echo "Unicloud installed"
 #TEMP work around until we have unicloud image for gce - end
-
 
 cp /tmp/ServiceAccount.json /opt/unicloud/config
 echo "ServiceAccount file added to Unicloud"
