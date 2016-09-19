@@ -400,6 +400,7 @@ function execute_retry_mnt(){
 }
 function mount_nfs(){
 	readonly mountcmd="sudo mount $gluster_volume_name_mnt $gluster_mnt_dir_name"
+	readonly addtofstab_cmd="echo $gluster_volume_name_mnt $gluster_mnt_dir_name nfs defaults 0 0 | sudo tee -a /etc/fstab"
 	local sharing_worker_node=""
 
 	# Get list of all worker nodes
@@ -407,6 +408,8 @@ function mount_nfs(){
        	 	EXEC_CMD="$sshcmd fedora@${worker_node} sudo mkdir -p -m a+rwx $gluster_mnt_dir_name"
        	 	execute_retry_mnt 5
         	EXEC_CMD="$sshcmd fedora@${worker_node} $mountcmd"
+        	execute_retry_mnt 5
+		EXEC_CMD="$sshcmd fedora@${worker_node} $addtofstab_cmd"
         	execute_retry_mnt 5
 		sharing_worker_node=${worker_node}
 	done
@@ -416,8 +419,11 @@ function mount_nfs(){
         	execute_retry_mnt 5
         	EXEC_CMD="$sshcmd fedora@${master_node} sudo mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name"
         	execute_retry_mnt 5
+		EXEC_cmd="$sshcmd fedora@${master_node} $addtofstab_cmd"
+        	execute_retry_mnt 5
 	fi
 	mkdir -p -m a+rwx $gluster_mnt_dir_name; mount $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name
+        echo $sharing_worker_node:/$gluster_volume_name $gluster_mnt_dir_name nfs defaults 0 0 | sudo tee -a /etc/fstab
 }
 #-------------------------mount-nfs  - end
 
