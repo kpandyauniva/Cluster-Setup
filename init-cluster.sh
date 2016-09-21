@@ -439,9 +439,11 @@ export PATH=/opt/nextflow:$PATH
 export NXF_WORK=$gluster_mnt_dir_name/work
 export NXF_ASSETS=$gluster_mnt_dir_name/projects
 export NXF_EXECUTOR=k8s
+export CAPSULE_CACHE_DIR=/.nextflow/capsule
 EOF
  ln -s /opt/nextflow/univa-nextflow-env.sh /etc/profile.d/univa-nextflow-env.sh
  chmod a+rwx /opt/nextflow/*
+ chmod a+rwx /.nextflow/capsule
 }
 
 #-------------------------prepare nextflow env end
@@ -516,6 +518,6 @@ mount_nfs
 echo "..mounted"
 
 #setup link to master node for the installer (for kubectl)
-ssh -f -nNT -L 8080:127.0.0.1:8080 fedora@${master_node} 
-
+ssh -f -nNT -L 8080:127.0.0.1:8080 fedora@${master_node}
+echo "ssh -f -nNT -L 8080:127.0.0.1:8080 fedora@${master_node}" >/opt/unicloud/etc/univa-k8s-env.sh
 echo "...done"
