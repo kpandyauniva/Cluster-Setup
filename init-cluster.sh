@@ -23,6 +23,7 @@ MACHINE_TYPE=$($METADATA_SERVER_ATTRIB_CMD/node-machine -H "$HDR")
 CLUSTER_MACHINE_IMAGE=$($METADATA_SERVER_ATTRIB_CMD/node-image -H "$HDR")
 GLUSTER_DISK_SIZE=$($METADATA_SERVER_ATTRIB_CMD/node-gfs-disk-size -H "$HDR")
 NEXTFLOW_VERSION=$($METADATA_SERVER_ATTRIB_CMD/nxf-ver -H "$HDR")
+NODE_DISK_SIZE=$($METADATA_SERVER_ATTRIB_CMD/node-disk-size -H "$HDR")
 
 ZONE=$(curl -s $METADATA_SERVER_URL/instance/zone -H "$HDR" | awk -F'/' '{print $4}')
 PROJECT=$(curl -s $METADATA_SERVER_URL/project/project-id -H "$HDR")
@@ -139,6 +140,11 @@ function validate_input(){
 		GLUSTER_DISK_SIZE=20
         fi
 
+        if ! [[ $NODE_DISK_SIZE =~ ^[0-9]+$ ]] || [ $NODE_DISK_SIZE -le 40 ]; then
+                echo "Warning - input: invalid node-disk-size defaulting to 40" 
+		NODE_DISK_SIZE=40
+        fi
+
         if [  -z "$MACHINE_TYPE" ]; then
 	        echo "Warning - input: invalid node-machine defaulting to n1-standard-2" 
 		MACHINE_TYPE="n1-standard-2"
@@ -168,6 +174,7 @@ function validate_input(){
 
 #update profile to attach additional disk of specified size (that will be used as gluster disk)
 function update_profile(){
+        $(update-software-profile --name $worker_swprofile --update-partition root --disk-size $NODE_DISK_SIZE''GB)
 	$(update-software-profile --name $worker_swprofile --add-partition data  --device 2.1 --no-preserve --no-boot-loader --file-system xfs  --size $GLUSTER_DISK_SIZE''GB --disk-size $GLUSTER_DISK_SIZE''GB)
         if [ $? -ne 0 ]; then
                echo "Error: could not update master profile for attached disk..exiting" | tee /dev/stderr
